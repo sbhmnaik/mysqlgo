@@ -155,6 +155,15 @@ func newPodForCR(cr *mysqlv1alpha1.Mysql) *corev1.Pod {
 								MountPath: "/var/lib/mysql",
 							},
 						},
+					Volumes: []corev1.Volume{
+							{
+								Name: pvStorageName,
+								VolumeSource: corev1.VolumeSource{
+									PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+										ClaimName: mysql-pv-claim,
+									},
+								},
+							},
 					Env: []corev1.EnvVar{
 							{
 								Name:  "MYSQL_ROOT_PASSWORD",
@@ -172,19 +181,8 @@ func newPodForCR(cr *mysqlv1alpha1.Mysql) *corev1.Pod {
 								Name:      "MYSQL_PASSWORD",
 								Value: passwordSecret,
 							},
-						
-		Spec: corev1.PodSpec{
-					Volumes: []corev1.Volume{
-						{
-							Name: pvStorageName,
-							VolumeSource: corev1.VolumeSource{
-								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-									ClaimName: mysql-pv-claim,
-								},
-							},
 						},
 					},
-
 				},
 			},
 		},
