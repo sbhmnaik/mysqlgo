@@ -143,28 +143,28 @@ func newPodForCR(cr *mysqlv1alpha1.Mysql) *corev1.Pod {
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{
 				{
-					Name:    "mysql",
-					Image:   "openshift/mysql-55-centos7",
+					Name:  "mysql",
+					Image: "openshift/mysql-55-centos7",
 					Ports: []corev1.ContainerPort{{
-							ContainerPort: 3306,
-							Name:          "mysql",
-						}},
+						ContainerPort: 3306,
+						Name:          "mysql",
+					}},
 					VolumeMounts: []corev1.VolumeMount{
-							{
-								Name:      mysql-persistent-storage,
-								MountPath: "/var/lib/mysql",
-							},
+						{
+							Name:      mysql - persistent - storage,
+							MountPath: "/var/lib/mysql",
 						},
+					},
 					Volumes: []corev1.Volume{
-							{
-								Name: pvStorageName,
-								VolumeSource: corev1.VolumeSource{
-									PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-										ClaimName: mysql-pv-claim,
-									},
+						{
+							Name: pvStorageName,
+							VolumeSource: corev1.VolumeSource{
+								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+									ClaimName: mysql - pv - claim,
 								},
 							},
-					Env: []corev1.EnvVar{
+						},
+						Env: []corev1.EnvVar{
 							{
 								Name:  "MYSQL_ROOT_PASSWORD",
 								Value: rootpwd,
@@ -174,11 +174,11 @@ func newPodForCR(cr *mysqlv1alpha1.Mysql) *corev1.Pod {
 								Value: dbname,
 							},
 							{
-								Name:      "MYSQL_USER",
+								Name:  "MYSQL_USER",
 								Value: userSecret,
 							},
 							{
-								Name:      "MYSQL_PASSWORD",
+								Name:  "MYSQL_PASSWORD",
 								Value: passwordSecret,
 							},
 						},
