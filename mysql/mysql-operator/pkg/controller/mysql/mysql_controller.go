@@ -145,22 +145,46 @@ func newPodForCR(cr *mysqlv1alpha1.Mysql) *corev1.Pod {
 				{
 					Name:    "mysql",
 					Image:   "openshift/mysql-55-centos7",
-					env:
-                                        # Use secret in real usage
-                                        - name: MYSQL_ROOT_PASSWORD
-                                          value: password
-					securityContext:
-                                          privileged: true
-                                        ports:
-                                        - containerPort: 3306
-                                          name: mysql
-                                        volumeMounts:
-                                        - name: mysql-persistent-storage
-                                          mountPath: /var/lib/mysql
-                                        volumes:
-                                        - name: mysql-persistent-storage
-                                          persistentVolumeClaim:
-                                            claimName: mysql-pv-claim
+					Ports: []corev1.ContainerPort{{
+							ContainerPort: 3306,
+							Name:          "mysql",
+						}},
+					VolumeMounts: []corev1.VolumeMount{
+							{
+								Name:      mysql-persistent-storage,
+								MountPath: "/var/lib/mysql",
+							},
+						},
+					Env: []corev1.EnvVar{
+							{
+								Name:  "MYSQL_ROOT_PASSWORD",
+								Value: rootpwd,
+							},
+							{
+								Name:  "MYSQL_DATABASE",
+								Value: dbname,
+							},
+							{
+								Name:      "MYSQL_USER",
+								Value: userSecret,
+							},
+							{
+								Name:      "MYSQL_PASSWORD",
+								Value: passwordSecret,
+							},
+						
+		Spec: corev1.PodSpec{
+					Volumes: []corev1.Volume{
+						{
+							Name: pvStorageName,
+							VolumeSource: corev1.VolumeSource{
+								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+									ClaimName: mysql-pv-claim,
+								},
+							},
+						},
+					},
+
 				},
 			},
 		},
