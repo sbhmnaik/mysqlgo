@@ -3,165 +3,91 @@ package mysql
 import (
 	"context"
 
+	mysqlv1alpha1 "github.com/persistentsys/mysql-go-operator/pkg/apis/mysql/v1alpha1"
+	"github.com/persistentsys/mysql-go-operator/pkg/utils"
+
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
-	mysqlv1alpha1 "persistent.com/mysql/mysql-operator/pkg/apis/mysql/v1alpha1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-var log = logf.Log.WithName("controller_mysql")
+const mysqlPort = 80
+const pvStorageName = "mysql-pv-storage"
+const pvClaimName = "mysql-pv-claim"
 
-/**
-* USER ACTION REQUIRED: This is a scaffold file intended for the user to modify with their own Controller
-* business logic.  Delete these comments after modifying this file.*
- */
-
-// Add creates a new Mysql Controller and adds it to the Manager. The Manager will set fields on the Controller
-// and Start it when the Manager is Started.
-func Add(mgr manager.Manager) error {
-	return add(mgr, newReconciler(mgr))
+func mysqlDeploymentName(v *mysqlv1alpha1.Mysql) string {
+	return v.Name + "-server"
 }
 
-// newReconciler returns a new reconcile.Reconciler
-func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-	return &ReconcileMysql{client: mgr.GetClient(), scheme: mgr.GetScheme()}
+func mysqlServiceName(v *mysqlv1alpha1.Mysql) string {
+	return v.Name + "-service"
 }
 
-// add adds a new Controller to mgr with r as the reconcile.Reconciler
-func add(mgr manager.Manager, r reconcile.Reconciler) error {
-	// Create a new controller
-	c, err := controller.New("mysql-controller", mgr, controller.Options{Reconciler: r})
-	if err != nil {
-		return err
-	}
-
-	// Watch for changes to primary resource Mysql
-	err = c.Watch(&source.Kind{Type: &mysqlv1alpha1.Mysql{}}, &handler.EnqueueRequestForObject{})
-	if err != nil {
-		return err
-	}
-
-	// TODO(user): Modify this to be the types you create that are owned by the primary resource
-	// Watch for changes to secondary resource Pods and requeue the owner Mysql
-	err = c.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &mysqlv1alpha1.Mysql{},
-	})
-	if err != nil {
-		return err
-	}
-
-	return nil
+func mysqlAuthName() string {
+	return "mysql-auth"
 }
 
-// blank assignment to verify that ReconcileMysql implements reconcile.Reconciler
-var _ reconcile.Reconciler = &ReconcileMysql{}
+func (r *ReconcileMysql) mysqlDeployment(v *mysqlv1alpha1.Mysql) *appsv1.Deployment {
+	labels := utils.Labels(v, "mysql")
+	size := v.Spec.Size
+	image := v.Spec.Image
 
-// ReconcileMysql reconciles a Mysql object
-type ReconcileMysql struct {
-	// This client, initialized using mgr.Client() above, is a split client
-	// that reads objects from the cache and writes to the apiserver
-	client client.Client
-	scheme *runtime.Scheme
-}
+	dbname := v.Spec.Database
+	rootpwd := v.Spec.Rootpwd
 
-// Reconcile reads that state of the cluster for a Mysql object and makes changes based on the state read
-// and what is in the Mysql.Spec
-// TODO(user): Modify this Reconcile function to implement your Controller logic.  This example creates
-// a Pod as an example
-// Note:
-// The Controller will requeue the Request to be processed again if the returned error is non-nil or
-// Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
-func (r *ReconcileMysql) Reconcile(request reconcile.Request) (reconcile.Result, error) {
-	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
-	reqLogger.Info("Reconciling Mysql")
-
-	// Fetch the Mysql instance
-	instance := &mysqlv1alpha1.Mysql{}
-	err := r.client.Get(context.TODO(), request.NamespacedName, instance)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			// Request object not found, could have been deleted after reconcile request.
-			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
-			// Return and don't requeue
-			return reconcile.Result{}, nil
-		}
-		// Error reading the object - requeue the request.
-		return reconcile.Result{}, err
-	}
-
-	// Define a new Pod object
-	pod := newPodForCR(instance)
-
-	// Set Mysql instance as the owner and controller
-	if err := controllerutil.SetControllerReference(instance, pod, r.scheme); err != nil {
-		return reconcile.Result{}, err
-	}
-
-	// Check if this Pod already exists
-	found := &corev1.Pod{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, found)
-	if err != nil && errors.IsNotFound(err) {
-		reqLogger.Info("Creating a new Pod", "Pod.Namespace", pod.Namespace, "Pod.Name", pod.Name)
-		err = r.client.Create(context.TODO(), pod)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-
-		// Pod created successfully - don't requeue
-		return reconcile.Result{}, nil
-	} else if err != nil {
-		return reconcile.Result{}, err
-	}
-
-	// Pod already exists - don't requeue
-	reqLogger.Info("Skip reconcile: Pod already exists", "Pod.Namespace", found.Namespace, "Pod.Name", found.Name)
-	return reconcile.Result{}, nil
-}
-
-// newPodForCR returns a busybox pod with the same name/namespace as the cr
-func newPodForCR(cr *mysqlv1alpha1.Mysql) *corev1.Pod {
-	labels := map[string]string{
-		"app": cr.Name,
-	}
-	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Name + "-pod",
-			Namespace: cr.Namespace,
-			Labels:    labels,
+	userSecret := &corev1.EnvVarSource{
+		SecretKeyRef: &corev1.SecretKeySelector{
+			LocalObjectReference: corev1.LocalObjectReference{Name: mysqlAuthName()},
+			Key:                  "username",
 		},
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{
-				{
-					Name:  "mysql",
-					Image: "openshift/mysql-55-centos7",
-					Ports: []corev1.ContainerPort{{
-						ContainerPort: 3306,
-						Name:          "mysql",
-					}},
-					VolumeMounts: []corev1.VolumeMount{
-						{
-							Name:      mysql - persistent - storage,
-							MountPath: "/var/lib/mysql",
-						},
-					},
+	}
+
+	passwordSecret := &corev1.EnvVarSource{
+		SecretKeyRef: &corev1.SecretKeySelector{
+			LocalObjectReference: corev1.LocalObjectReference{Name: mysqlAuthName()},
+			Key:                  "password",
+		},
+	}
+
+	dep := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      mysqlDeploymentName(v),
+			Namespace: v.Namespace,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &size,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: labels,
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: labels,
+				},
+				Spec: corev1.PodSpec{
 					Volumes: []corev1.Volume{
 						{
 							Name: pvStorageName,
 							VolumeSource: corev1.VolumeSource{
 								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-									ClaimName: mysql - pv - claim,
+									ClaimName: pvClaimName,
 								},
+							},
+						},
+					},
+					Containers: []corev1.Container{{
+						Image:           image,
+						ImagePullPolicy: corev1.PullAlways,
+						Name:            "mysql-service",
+						Ports: []corev1.ContainerPort{{
+							ContainerPort: mysqlPort,
+							Name:          "mysql",
+						}},
+						VolumeMounts: []corev1.VolumeMount{
+							{
+								Name:      pvStorageName,
+								MountPath: "/var/lib/mysql",
 							},
 						},
 						Env: []corev1.EnvVar{
@@ -174,17 +100,71 @@ func newPodForCR(cr *mysqlv1alpha1.Mysql) *corev1.Pod {
 								Value: dbname,
 							},
 							{
-								Name:  "MYSQL_USER",
-								Value: userSecret,
+								Name:      "MYSQL_USER",
+								ValueFrom: userSecret,
 							},
 							{
-								Name:  "MYSQL_PASSWORD",
-								Value: passwordSecret,
+								Name:      "MYSQL_PASSWORD",
+								ValueFrom: passwordSecret,
 							},
 						},
-					},
+					}},
 				},
 			},
 		},
 	}
+
+	controllerutil.SetControllerReference(v, dep, r.scheme)
+	return dep
+}
+
+func (r *ReconcileMysql) mysqlService(v *mysqlv1alpha1.Mysql) *corev1.Service {
+	labels := utils.Labels(v, "mysql")
+
+	s := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      mysqlServiceName(v),
+			Namespace: v.Namespace,
+			Labels:    labels,
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: labels,
+			Ports: []corev1.ServicePort{{
+				Protocol:   corev1.ProtocolTCP,
+				Port:       mysqlPort,
+				TargetPort: intstr.FromInt(3306),
+				NodePort:   v.Spec.Port,
+			}},
+			Type: corev1.ServiceTypeNodePort,
+		},
+	}
+
+	controllerutil.SetControllerReference(v, s, r.scheme)
+	return s
+}
+
+func (r *ReconcileMysql) updateMysqlStatus(v *mysqlv1alpha1.Mysql) error {
+	//v.Status.BackendImage = mysqlImage
+	err := r.client.Status().Update(context.TODO(), v)
+	return err
+}
+
+func (r *ReconcileMysql) mysqlAuthSecret(v *mysqlv1alpha1.Mysql) *corev1.Secret {
+
+	username := v.Spec.Username
+	password := v.Spec.Password
+
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      mysqlAuthName(),
+			Namespace: v.Namespace,
+		},
+		Type: "Opaque",
+		Data: map[string][]byte{
+			"username": []byte(username),
+			"password": []byte(password),
+		},
+	}
+	controllerutil.SetControllerReference(v, secret, r.scheme)
+	return secret
 }
