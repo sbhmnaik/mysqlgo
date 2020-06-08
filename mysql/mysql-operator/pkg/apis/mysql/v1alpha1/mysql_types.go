@@ -8,21 +8,28 @@ import (
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 // MysqlSpec defines the desired state of Mysql
-type MysqlSpec struct {
+type MySQLSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
-        Size int32 `json:"size"`
+	Size int32 `json:"size"`
+	Username string `json:"username"`
+	Password string `json:"password"`
+	Database string `json:"database"`
+	Rootpwd string `json:"rootpwd"`
+	Image string `json:"image"`
+	DataStoragePath string `json:"dataStoragePath"`
+	DataStorageSize string `json:"dataStorageSize"`
+	Port int32 `json:"port"`
 }
 
-// MysqlStatus defines the observed state of Mysql
-type MysqlStatus struct {
+// MySQLStatus defines the observed state of MySQL
+type MySQLStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
 	// Add custom validation using kubebuilder tags: https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
-        Nodes []string `json:"nodes"`
+	Nodes []string `json:"nodes"`
 }
-
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // Mysql is the Schema for the mysqls API
